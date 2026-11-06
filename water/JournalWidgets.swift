@@ -100,7 +100,7 @@ private struct StatTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value, format: .number)
-                .font(.title.bold())
+                .font(.system(.title, weight: .black))
                 .foregroundStyle(theme.text)
             Text(label)
                 .font(.caption)

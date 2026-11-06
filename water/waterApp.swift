@@ -11,16 +11,18 @@ import SwiftData
 @main
 struct waterApp: App {
     @State private var theme = ThemeStore()
+    @State private var dashboard = DashboardStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(theme)
+                .environment(dashboard)
                 .tint(theme.accent)
                 .preferredColorScheme(.light)
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(minWidth: 900, minHeight: 600)
         }
-        .modelContainer(for: JournalEntry.self)
+        .modelContainer(for: [JournalEntry.self, ExamPlan.self, Subject.self, SyllabusTopic.self])
         .commands {
             // ⌘N creates a journal entry instead of opening another window.
             CommandGroup(replacing: .newItem) {}

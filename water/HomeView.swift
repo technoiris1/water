@@ -9,13 +9,22 @@ import SwiftUI
 struct HomeView: View {
     @Environment(DashboardStore.self) private var dashboard
     @Environment(ThemeStore.self) private var theme
+    @Environment(\.contentLayerWidth) private var layerWidth
 
     /// Called when a widget is clicked outside of edit mode.
     var onOpen: (AppModule) -> Void
 
     @State private var isEditing = false
     @State private var interaction: Interaction?
-    @State private var canvasWidth: CGFloat = 0
+
+    private static let padding: CGFloat = 24
+
+    /// The grid's width is derived from the whole window layer, always leaving room for the sidebar
+    /// whether or not it's showing. So hiding/showing the sidebar just slides the grid as one block,
+    /// with every widget keeping its exact position and size.
+    private var canvasWidth: CGFloat {
+        max(layerWidth - (SidebarMetrics.reservedWidth - SidebarMetrics.margin) - Self.padding * 2, 0)
+    }
 
     /// An in-progress drag or resize of one widget.
     private struct Interaction {
@@ -37,20 +46,12 @@ struct HomeView: View {
 
                 if dashboard.widgets.isEmpty {
                     emptyState
-                } else {
-                    // Measure the full content width so the grid can size its cells.
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 0)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { canvasWidth = $0 }
-                    if canvasWidth > 0 {
-                        canvas(metrics: DashboardMetrics(width: canvasWidth))
-                    }
+                } else if canvasWidth > 0 {
+                    canvas(metrics: DashboardMetrics(width: canvasWidth))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Extra trailing/bottom room so hard shadows aren't clipped.
-            .padding(24)
+            .padding(Self.padding)
         }
         .navigationTitle("Home")
         .toolbar { toolbarContent }
@@ -316,6 +317,7 @@ private struct CellGuides: View {
 /// A widget's card: heavy title plus a read-only preview of its module.
 private struct WidgetCard: View {
     @Environment(ThemeStore.self) private var theme
+    @Environment(\.contentLayerWidth) private var layerWidth
     let widget: DashboardWidget
     let isEditing: Bool
     let isActive: Bool
@@ -341,15 +343,17 @@ private struct WidgetCard: View {
         .padding(16)
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
         .clipped()
-        .themedSurface(shadowOffset: isActive ? 10 : BoxStyle.shadowOffset)
+        .themedSurface()
         .overlay {
-            if isEditing && !isActive {
+            if isActive {
+                // The widget being dragged gets a solid accent outline instead of a shadow.
+                Rectangle().strokeBorder(theme.accent, lineWidth: 4)
+            } else if isEditing {
                 Rectangle()
                     .strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                     .padding(4)
             }
         }
-        .offset(x: isActive ? -4 : 0, y: isActive ? -4 : 0)
     }
 }
 
@@ -369,6 +373,7 @@ private struct WidgetContent: View {
 
 private struct ResizeHandle: View {
     @Environment(ThemeStore.self) private var theme
+    @Environment(\.contentLayerWidth) private var layerWidth
 
     var body: some View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")

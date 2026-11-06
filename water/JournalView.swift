@@ -21,7 +21,9 @@ struct JournalView: View {
         HStack(spacing: 16) {
             VStack(spacing: 0) {
                 filterBar
-                Divider()
+                Rectangle()
+                    .fill(theme.text)
+                    .frame(height: BoxStyle.borderWidth)
                 EntryListView(
                     interval: range.interval(customStart: customStart, customEnd: customEnd),
                     searchText: searchText,
@@ -36,21 +38,26 @@ struct JournalView: View {
                     EntryEditorView(entry: selection)
                         .id(selection.persistentModelID)
                 } else {
-                    ContentUnavailableView {
-                        Label("No Entry Selected", systemImage: "book.pages")
-                    } description: {
+                    VStack(spacing: 12) {
+                        Image(systemName: "book.pages")
+                            .font(.system(size: 40, weight: .black))
+                            .foregroundStyle(theme.accent)
+                        Text("No entry selected")
+                            .font(.system(.title2, weight: .black))
+                            .foregroundStyle(theme.text)
                         Text("Pick an entry, or press ⌘N to write a new one.")
-                    } actions: {
+                            .foregroundStyle(theme.secondaryText)
                         Button("New Entry", action: addEntry)
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.bold)
+                            .padding(.top, 4)
                     }
-                    .foregroundStyle(theme.secondaryText)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .themedSurface()
         }
-        .padding(16)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 20)
         .navigationTitle("Journal")
         .searchable(text: $searchText, prompt: "Search entries")
         .toolbar {
@@ -66,6 +73,7 @@ struct JournalView: View {
 
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title: "Journal", systemImage: "book.closed")
             Picker("Date Range", selection: $range) {
                 ForEach(DateRangeFilter.allCases) { option in
                     Text(option.rawValue).tag(option)
@@ -78,7 +86,7 @@ struct JournalView: View {
                 DatePicker("To", selection: $customEnd, displayedComponents: .date)
             }
         }
-        .padding(12)
+        .padding(14)
     }
 
     private func addEntry() {
@@ -123,24 +131,42 @@ private struct EntryListView: View {
 
     var body: some View {
         if entries.isEmpty {
-            ContentUnavailableView("No Entries", systemImage: "magnifyingglass", description: Text("Nothing matches this search or date range."))
-                .foregroundStyle(theme.secondaryText)
-                .frame(maxHeight: .infinity)
-        } else {
-            List(entries, selection: $selection) { entry in
-                EntryRow(entry: entry)
-                    .tag(entry)
-                    .contextMenu {
-                        Button("Delete", systemImage: "trash", role: .destructive) { delete(entry) }
-                    }
+            VStack(spacing: 6) {
+                Text("No entries")
+                    .font(.system(.title3, weight: .black))
+                    .foregroundStyle(theme.text)
+                Text("Nothing matches this search or date range.")
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(theme.secondaryText)
             }
-            .scrollContentBackground(.hidden)
+            .padding()
+            .frame(maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(entries) { entry in
+                        Button { selection = entry } label: {
+                            EntryRow(entry: entry, isSelected: selection == entry)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Delete", systemImage: "trash", role: .destructive) { delete(entry) }
+                        }
+                    }
+                }
+                .padding(12)
+            }
+            // Focusable so the Delete key removes the selected entry.
+            .focusable()
+            .focusEffectDisabled()
             .onDeleteCommand {
                 if let selection { delete(selection) }
             }
             .safeAreaInset(edge: .bottom) {
                 Text(entries.count == 1 ? "1 entry" : "\(entries.count) entries")
-                    .font(.caption)
+                    .font(.caption.weight(.heavy))
+                    .textCase(.uppercase)
                     .foregroundStyle(theme.secondaryText)
                     .padding(8)
             }
@@ -156,24 +182,31 @@ private struct EntryListView: View {
 private struct EntryRow: View {
     @Environment(ThemeStore.self) private var theme
     let entry: JournalEntry
+    let isSelected: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(entry.title.isEmpty ? "Untitled" : entry.title)
-                .font(.headline)
-                .foregroundStyle(theme.text)
+                .font(.system(.headline, weight: .heavy))
+                .foregroundStyle(isSelected ? Color.white : theme.text)
                 .lineLimit(1)
             Text(entry.date.formatted(date: .abbreviated, time: .shortened))
-                .font(.caption)
-                .foregroundStyle(theme.accent)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(isSelected ? Color.white.opacity(0.85) : theme.accent)
             if !entry.content.isEmpty {
                 Text(entry.content)
                     .font(.callout)
-                    .foregroundStyle(theme.secondaryText)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : theme.secondaryText)
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(isSelected ? theme.accent : theme.surface)
+        .overlay {
+            Rectangle().strokeBorder(theme.text, lineWidth: isSelected ? BoxStyle.borderWidth : 1)
+        }
+        .contentShape(.rect)
     }
 }
 
@@ -186,14 +219,16 @@ private struct EntryEditorView: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Title", text: $entry.title)
                 .textFieldStyle(.plain)
-                .font(.title.bold())
+                .font(.system(size: 30, weight: .black))
                 .foregroundStyle(theme.text)
 
             DatePicker("Date", selection: $entry.date)
                 .labelsHidden()
                 .fixedSize()
 
-            Divider()
+            Rectangle()
+                .fill(theme.text)
+                .frame(height: BoxStyle.borderWidth)
 
             TextEditor(text: $entry.content)
                 .font(.body)

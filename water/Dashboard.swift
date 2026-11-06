@@ -11,6 +11,8 @@ import Foundation
 enum WidgetKind: String, Codable, CaseIterable, Identifiable {
     case journalRecent
     case journalStats
+    case academicsUpcoming
+    case academicsProgress
 
     var id: Self { self }
 
@@ -18,6 +20,7 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
     var module: AppModule {
         switch self {
         case .journalRecent, .journalStats: .journal
+        case .academicsUpcoming, .academicsProgress: .academics
         }
     }
 
@@ -25,6 +28,8 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .journalRecent: "Recent Entries"
         case .journalStats: "Journal Stats"
+        case .academicsUpcoming: "Upcoming Exams"
+        case .academicsProgress: "Syllabus Progress"
         }
     }
 
@@ -32,21 +37,27 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .journalRecent: "book.closed"
         case .journalStats: "chart.bar"
+        case .academicsUpcoming: "calendar"
+        case .academicsProgress: "checklist"
         }
     }
 
-    /// Size in grid units (columns × rows) when first added.
+    /// Size in grid cells (columns × rows) when first added.
     var defaultSize: GridSize {
         switch self {
-        case .journalRecent: GridSize(width: 7, height: 5)
-        case .journalStats: GridSize(width: 5, height: 2)
+        case .journalRecent: GridSize(width: 4, height: 3)
+        case .journalStats: GridSize(width: 4, height: 1)
+        case .academicsUpcoming: GridSize(width: 4, height: 2)
+        case .academicsProgress: GridSize(width: 4, height: 2)
         }
     }
 
     var minimumSize: GridSize {
         switch self {
-        case .journalRecent: GridSize(width: 3, height: 2)
-        case .journalStats: GridSize(width: 3, height: 2)
+        case .journalRecent: GridSize(width: 2, height: 2)
+        case .journalStats: GridSize(width: 3, height: 1)
+        case .academicsUpcoming: GridSize(width: 2, height: 2)
+        case .academicsProgress: GridSize(width: 2, height: 2)
         }
     }
 }
@@ -72,7 +83,7 @@ struct DashboardWidget: Codable, Identifiable, Hashable {
 }
 
 enum DashboardLayout {
-    static let columns = 12
+    static let columns = 8
 
     /// Removes overlaps and floats widgets upward to fill gaps.
     /// The pinned widget (the one being dragged or resized) keeps its spot and everything else moves around it.
@@ -107,7 +118,8 @@ final class DashboardStore {
         didSet { save() }
     }
 
-    private static let layoutKey = "dashboardLayout"
+    // Bumped when the grid changed from 12 columns to an 8 × N bento grid, so old layouts reset.
+    private static let layoutKey = "dashboardLayout.bento"
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.layoutKey),
@@ -120,8 +132,10 @@ final class DashboardStore {
 
     static var defaultLayout: [DashboardWidget] {
         [
-            DashboardWidget(kind: .journalRecent, x: 0, y: 0, width: 7, height: 5),
-            DashboardWidget(kind: .journalStats, x: 7, y: 0, width: 5, height: 2),
+            DashboardWidget(kind: .academicsUpcoming, x: 0, y: 0, width: 4, height: 2),
+            DashboardWidget(kind: .journalStats, x: 4, y: 0, width: 4, height: 1),
+            DashboardWidget(kind: .academicsProgress, x: 4, y: 1, width: 4, height: 2),
+            DashboardWidget(kind: .journalRecent, x: 0, y: 2, width: 4, height: 3),
         ]
     }
 

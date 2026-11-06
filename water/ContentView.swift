@@ -36,22 +36,42 @@ enum SidebarItem: Hashable {
     case module(AppModule)
 }
 
+/// Layout constants for the floating sidebar layer.
+enum SidebarMetrics {
+    static let width: CGFloat = 210
+    static let margin: CGFloat = 16
+    /// Horizontal space the sidebar occupies, including its margins.
+    static var reservedWidth: CGFloat { width + margin * 2 }
+}
+
+extension EnvironmentValues {
+    /// The full width of the content layer, independent of whether the sidebar is showing.
+    /// The Home grid sizes its cells from this so toggling the sidebar never resizes widgets.
+    @Entry var contentLayerWidth: CGFloat = 0
+}
+
 struct ContentView: View {
     @State private var selection: SidebarItem = .home
+    @State private var layerWidth: CGFloat = 0
     @AppStorage("isSidebarVisible") private var isSidebarVisible = true
 
     var body: some View {
-        // A plain HStack instead of NavigationSplitView: the sidebar is a fixed-width card
-        // that slides in and out, so showing/hiding it never disturbs the detail layout.
-        HStack(spacing: 0) {
+        // Two separate layers: the content underneath, and the sidebar floating on top of it.
+        // Showing/hiding the sidebar only slides the content over by a fixed inset; it never
+        // changes the size the content lays itself out at.
+        ZStack(alignment: .topLeading) {
+            detail
+                .environment(\.contentLayerWidth, layerWidth)
+                .safeAreaPadding(.leading, isSidebarVisible ? SidebarMetrics.reservedWidth - SidebarMetrics.margin : 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             if isSidebarVisible {
                 SidebarView(selection: $selection)
                     .transition(.move(edge: .leading).combined(with: .opacity))
+                    .zIndex(1)
             }
-
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { layerWidth = $0 }
         .background { ThemedBackground() }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -116,12 +136,10 @@ private struct SidebarView: View {
             .buttonStyle(.boldSecondary)
         }
         .padding(16)
-        .frame(width: 210)
+        .frame(width: SidebarMetrics.width)
         .frame(maxHeight: .infinity, alignment: .top)
         .themedSurface()
-        .padding(.leading, 16)
-        .padding(.vertical, 16)
-        .padding(.trailing, 2)
+        .padding(SidebarMetrics.margin)
     }
 }
 
@@ -148,11 +166,6 @@ private struct SidebarRow: View {
                         Rectangle().strokeBorder(theme.text, lineWidth: BoxStyle.borderWidth)
                     }
                 }
-                .background {
-                    if isSelected {
-                        HardShadow(offset: 3).fill(theme.text)
-                    }
-                }
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -166,5 +179,7 @@ private struct SidebarRow: View {
         .environment(DashboardStore())
         .modelContainer(for: [JournalEntry.self, ExamPlan.self, Subject.self, SyllabusTopic.self], inMemory: true)
         .preferredColorScheme(.light)
+        // Separate defaults so the preview doesn't read or change the real app's sidebar setting.
+        .defaultAppStorage(UserDefaults(suiteName: "preview") ?? .standard)
         .frame(width: 1200, height: 800)
 }

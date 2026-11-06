@@ -150,6 +150,8 @@ private struct ExamPlanDetailView: View {
     @State private var displayedMonth: Date
     @State private var isAddingSubject = false
     @State private var isConfirmingDelete = false
+    @State private var isRenaming = false
+    @State private var newName = ""
     @State private var contentWidth: CGFloat = 0
 
     init(plan: ExamPlan) {
@@ -197,14 +199,35 @@ private struct ExamPlanDetailView: View {
         } message: {
             Text("All its subjects, dates and syllabi will be deleted too.")
         }
+        .alert("Rename Exam", isPresented: $isRenaming) {
+            TextField("Exam name", text: $newName)
+            Button("Save") {
+                let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { plan.name = trimmed }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 16) {
-            TextField("Exam name", text: $plan.name)
-                .textFieldStyle(.plain)
-                .font(.system(size: 40, weight: .black))
-                .foregroundStyle(theme.text)
+            // Shown as text (renamed via the pencil) so opening the page doesn't focus and select the name.
+            HStack(spacing: 12) {
+                Text(plan.name)
+                    .font(.system(size: 40, weight: .black))
+                    .foregroundStyle(theme.text)
+                Button {
+                    newName = plan.name
+                    isRenaming = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(.boldSecondary)
+                .help("Rename Exam")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .themedSurface()
 
             if let next = plan.nextExam {
                 NavigationLink(value: next) {
@@ -525,6 +548,8 @@ private struct SubjectDetailView: View {
     @State private var newTopic = ""
     @State private var isPastingTopics = false
     @State private var isConfirmingDelete = false
+    @State private var isRenaming = false
+    @State private var newName = ""
 
     var body: some View {
         ScrollView {
@@ -553,6 +578,14 @@ private struct SubjectDetailView: View {
         .sheet(isPresented: $isPastingTopics) {
             PasteTopicsSheet(onAdd: addTopics)
         }
+        .alert("Rename Subject", isPresented: $isRenaming) {
+            TextField("Subject name", text: $newName)
+            Button("Save") {
+                let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { subject.name = trimmed }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private var header: some View {
@@ -565,10 +598,19 @@ private struct SubjectDetailView: View {
                 if let planName = subject.plan?.name {
                     SectionLabel(title: planName, systemImage: "graduationcap")
                 }
-                TextField("Subject name", text: $subject.name)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 40, weight: .black))
-                    .foregroundStyle(theme.text)
+                HStack(spacing: 12) {
+                    Text(subject.name)
+                        .font(.system(size: 40, weight: .black))
+                        .foregroundStyle(theme.text)
+                    Button {
+                        newName = subject.name
+                        isRenaming = true
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(.boldSecondary)
+                    .help("Rename Subject")
+                }
 
                 HStack(spacing: 12) {
                     Toggle("Exam date", isOn: hasExamDate)
@@ -582,8 +624,11 @@ private struct SubjectDetailView: View {
                         .foregroundStyle(subject.color)
                 }
             }
+            .padding(.vertical, 14)
+            .padding(.trailing, 16)
         }
         .fixedSize(horizontal: false, vertical: true)
+        .themedSurface()
     }
 
     private var syllabusCard: some View {
@@ -853,4 +898,61 @@ private struct EmptyCard<Actions: View>: View {
         .frame(maxWidth: .infinity)
         .themedSurface()
     }
+}
+
+// MARK: - Previews
+
+/// Sample "12th Boards" data for previews.
+private func makeSampleBoards() -> (ModelContainer, ExamPlan) {
+    guard let container = try? ModelContainer(
+        for: ExamPlan.self, Subject.self, SyllabusTopic.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    ) else {
+        fatalError("Couldn't create the preview container.")
+    }
+    let context = container.mainContext
+    let plan = ExamPlan(name: "12th Boards")
+    context.insert(plan)
+
+    let calendar = Calendar.current
+    let names = ["English", "Physics", "Chemistry", "Mathematics", "Computer Science"]
+    for (index, name) in names.enumerated() {
+        let date = calendar.date(byAdding: .day, value: 10 + index * 4, to: suggestedExamDate())
+        let subject = Subject(name: name, examDate: date, colorIndex: index)
+        context.insert(subject)
+        plan.subjects.append(subject)
+        for chapter in 0..<6 {
+            let topic = SyllabusTopic(title: "Chapter \(chapter + 1)", order: chapter)
+            topic.isDone = chapter < index + 1
+            context.insert(topic)
+            subject.topics.append(topic)
+        }
+    }
+    return (container, plan)
+}
+
+#Preview("Exam Detail") {
+    let (container, plan) = makeSampleBoards()
+    NavigationStack {
+        ExamPlanDetailView(plan: plan)
+    }
+    .background { ThemedBackground() }
+    .environment(ThemeStore())
+    .modelContainer(container)
+    .preferredColorScheme(.light)
+    .frame(width: 1100, height: 800)
+}
+
+#Preview("Subject Syllabus") {
+    let (container, plan) = makeSampleBoards()
+    NavigationStack {
+        if let subject = plan.datesheet.first {
+            SubjectDetailView(subject: subject)
+        }
+    }
+    .background { ThemedBackground() }
+    .environment(ThemeStore())
+    .modelContainer(container)
+    .preferredColorScheme(.light)
+    .frame(width: 900, height: 800)
 }

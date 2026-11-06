@@ -177,14 +177,21 @@ struct ThemedBackground: View {
     }
 }
 
-/// Draws content on a rounded card in the palette's surface colour.
+/// Shared measurements for the app's boxy, bold look.
+enum BoxStyle {
+    static let borderWidth: CGFloat = 2
+}
+
+/// Draws content on a square card: surface colour and a thick border.
 struct ThemedSurface: ViewModifier {
     @Environment(ThemeStore.self) private var theme
 
     func body(content: Content) -> some View {
         content
-            .background(theme.surface.opacity(theme.settings.surfaceOpacity), in: .rect(cornerRadius: 14))
-            .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+            .background(theme.surface.opacity(theme.settings.surfaceOpacity))
+            .overlay {
+                Rectangle().strokeBorder(theme.text, lineWidth: BoxStyle.borderWidth)
+            }
     }
 }
 
@@ -192,4 +199,105 @@ extension View {
     func themedSurface() -> some View {
         modifier(ThemedSurface())
     }
+}
+
+/// Big, heavy page title with an optional subtitle.
+struct PageHeader: View {
+    @Environment(ThemeStore.self) private var theme
+    let title: String
+    var subtitle: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 40, weight: .black))
+                .foregroundStyle(theme.text)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.headline)
+                    .foregroundStyle(theme.secondaryText)
+            }
+        }
+        // A boxed "sticker" keeps titles readable over busy background images.
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .themedSurface()
+    }
+}
+
+/// Uppercase, heavy label used for card and section headings.
+struct SectionLabel: View {
+    @Environment(ThemeStore.self) private var theme
+    let title: String
+    var systemImage: String?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let systemImage {
+                Image(systemName: systemImage)
+            }
+            Text(title)
+                .textCase(.uppercase)
+                .tracking(0.8)
+        }
+        .font(.system(.subheadline, weight: .black))
+        .foregroundStyle(theme.accent)
+        .lineLimit(1)
+    }
+}
+
+/// A flat progress bar with a border, matching the boxy style.
+struct BoxProgressBar: View {
+    @Environment(ThemeStore.self) private var theme
+    let value: Double
+    var color: Color?
+    var height: CGFloat = 10
+
+    var body: some View {
+        Rectangle()
+            .fill(theme.surface)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Rectangle()
+                        .fill(color ?? theme.accent)
+                        .frame(width: proxy.size.width * min(max(value, 0), 1))
+                }
+            }
+            .overlay { Rectangle().strokeBorder(theme.text, lineWidth: BoxStyle.borderWidth) }
+            .frame(height: height)
+    }
+}
+
+/// Square, bordered button that darkens while pressed.
+struct BoldButtonStyle: ButtonStyle {
+    var isProminent = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        BoldButton(configuration: configuration, isProminent: isProminent)
+    }
+
+    private struct BoldButton: View {
+        @Environment(ThemeStore.self) private var theme
+        @Environment(\.isEnabled) private var isEnabled
+        let configuration: ButtonStyleConfiguration
+        let isProminent: Bool
+
+        var body: some View {
+            configuration.label
+                .font(.system(.body, weight: .heavy))
+                .foregroundStyle(isProminent ? Color.white : theme.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(isProminent ? theme.accent : theme.surface)
+                .overlay { Rectangle().strokeBorder(theme.text, lineWidth: BoxStyle.borderWidth) }
+                .brightness(configuration.isPressed ? -0.12 : 0)
+                .opacity(isEnabled ? 1 : 0.4)
+                .contentShape(.rect)
+        }
+    }
+}
+
+extension ButtonStyle where Self == BoldButtonStyle {
+    static var bold: BoldButtonStyle { BoldButtonStyle() }
+    static var boldSecondary: BoldButtonStyle { BoldButtonStyle(isProminent: false) }
 }

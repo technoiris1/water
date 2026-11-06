@@ -62,7 +62,7 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     BackgroundPreview()
                         .frame(width: 120, height: 72)
-                        .clipShape(.rect(cornerRadius: 8))
+                        .clipped()
 
                     VStack(alignment: .leading) {
                         Button("Choose Image…") { isImportingImage = true }
@@ -120,25 +120,25 @@ private struct PaletteSwatch: View {
         VStack(spacing: 6) {
             ZStack {
                 Color(hex: palette.background)
-                RoundedRectangle(cornerRadius: 6)
+                Rectangle()
                     .fill(Color(hex: palette.surface))
+                    .border(Color(hex: palette.text), width: 1.5)
                     .padding(8)
                 HStack(spacing: 4) {
-                    Circle().fill(Color(hex: palette.accent))
-                    Circle().fill(Color(hex: palette.text))
-                    Circle().fill(Color(hex: palette.secondaryText))
+                    Rectangle().fill(Color(hex: palette.accent))
+                    Rectangle().fill(Color(hex: palette.text))
+                    Rectangle().fill(Color(hex: palette.secondaryText))
                 }
-                .frame(height: 12)
+                .frame(width: 48, height: 12)
             }
             .frame(height: 52)
-            .clipShape(.rect(cornerRadius: 10))
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(isSelected ? Color(hex: palette.accent) : .gray.opacity(0.25), lineWidth: isSelected ? 3 : 1)
+                Rectangle()
+                    .strokeBorder(isSelected ? Color(hex: palette.accent) : Color(hex: palette.text).opacity(0.3), lineWidth: isSelected ? 3 : 1)
             }
 
             Text(palette.name)
-                .font(.caption)
+                .font(.caption.weight(isSelected ? .heavy : .medium))
                 .lineLimit(1)
         }
         .contentShape(.rect)
@@ -149,9 +149,9 @@ private struct BackgroundPreview: View {
     var body: some View {
         ThemedBackground()
             .overlay {
-                RoundedRectangle(cornerRadius: 4)
-                    .modifier(ThemedSurface())
-                    .padding(12)
+                Color.clear
+                    .themedSurface()
+                    .padding(14)
             }
     }
 }
