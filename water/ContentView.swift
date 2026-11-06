@@ -27,14 +27,27 @@ enum AppModule: String, CaseIterable, Identifiable {
     }
 }
 
+/// What the sidebar can show: the Home dashboard or one of the modules.
+enum SidebarItem: Hashable {
+    case home
+    case module(AppModule)
+}
+
 struct ContentView: View {
-    @State private var selectedModule: AppModule? = .journal
+    @State private var selection: SidebarItem? = .home
 
     var body: some View {
         NavigationSplitView {
-            List(AppModule.allCases, selection: $selectedModule) { module in
-                Label(module.title, systemImage: module.systemImage)
-                    .tag(module)
+            List(selection: $selection) {
+                Label("Home", systemImage: "square.grid.2x2")
+                    .tag(SidebarItem.home)
+
+                Section("Tools") {
+                    ForEach(AppModule.allCases) { module in
+                        Label(module.title, systemImage: module.systemImage)
+                            .tag(SidebarItem.module(module))
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 190)
             .safeAreaInset(edge: .bottom) {
@@ -46,8 +59,10 @@ struct ContentView: View {
                 .padding(12)
             }
         } detail: {
-            switch selectedModule {
-            case .journal:
+            switch selection {
+            case .home:
+                HomeView { module in selection = .module(module) }
+            case .module(.journal):
                 JournalView()
             case nil:
                 ContentUnavailableView("Pick a tool from the sidebar", systemImage: "sidebar.left")
@@ -60,6 +75,8 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environment(ThemeStore())
+        .environment(DashboardStore())
         .modelContainer(for: JournalEntry.self, inMemory: true)
+        .preferredColorScheme(.light)
         .frame(width: 1000, height: 650)
 }
