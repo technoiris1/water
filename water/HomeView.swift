@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// The Home dashboard: a grid of widget previews that can be rearranged and resized in edit mode.
+/// The Home dashboard: a bento grid of widget previews that can be rearranged and resized in edit mode.
 struct HomeView: View {
     @Environment(DashboardStore.self) private var dashboard
     @Environment(ThemeStore.self) private var theme
@@ -17,8 +17,6 @@ struct HomeView: View {
     @State private var interaction: Interaction?
     @State private var canvasWidth: CGFloat = 0
 
-    private static let padding: CGFloat = 24
-
     /// An in-progress drag or resize of one widget.
     private struct Interaction {
         enum Kind { case move, resize }
@@ -29,33 +27,33 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
+            VStack(alignment: .leading, spacing: 24) {
+                PageHeader(
+                    title: greeting,
+                    subtitle: isEditing
+                        ? "Drag widgets to move them. Drag the corner handle to resize."
+                        : Date.now.formatted(date: .complete, time: .omitted)
+                )
+
                 if dashboard.widgets.isEmpty {
                     emptyState
                 } else {
-                    canvas(metrics: DashboardMetrics(width: canvasWidth))
+                    // Measure the full content width so the grid can size its cells.
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 0)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { canvasWidth = $0 }
+                    if canvasWidth > 0 {
+                        canvas(metrics: DashboardMetrics(width: canvasWidth))
+                    }
                 }
             }
-            .padding(Self.padding)
-        }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-            canvasWidth = max(width - Self.padding * 2, 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Extra trailing/bottom room so hard shadows aren't clipped.
+            .padding(24)
         }
         .navigationTitle("Home")
         .toolbar { toolbarContent }
-    }
-
-    // MARK: Header & toolbar
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(greeting)
-                .font(.largeTitle.bold())
-                .foregroundStyle(theme.text)
-            Text(isEditing ? "Drag widgets to move them, and drag the corner handle to resize." : Date.now.formatted(date: .complete, time: .omitted))
-                .foregroundStyle(theme.secondaryText)
-        }
     }
 
     private var greeting: String {
@@ -66,6 +64,8 @@ struct HomeView: View {
         }
     }
 
+    // MARK: Toolbar
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup {
@@ -75,7 +75,7 @@ struct HomeView: View {
                     withAnimation(.snappy) { dashboard.resetLayout() }
                 }
             }
-            Button(isEditing ? "Done" : "Edit Layout", systemImage: isEditing ? "checkmark" : "rectangle.3.group") {
+            Button(isEditing ? "Done" : "Edit Layout", systemImage: isEditing ? "checkmark" : "square.grid.3x3") {
                 withAnimation(.snappy) { isEditing.toggle() }
             }
         }
@@ -93,38 +93,45 @@ struct HomeView: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("Your Home Is Empty", systemImage: "square.grid.2x2")
-        } description: {
+        VStack(spacing: 12) {
+            Image(systemName: "square.grid.3x3")
+                .font(.system(size: 40, weight: .black))
+                .foregroundStyle(theme.accent)
+            Text("Your Home is empty")
+                .font(.system(.title2, weight: .black))
+                .foregroundStyle(theme.text)
             Text("Add widgets to preview your tools here.")
-        } actions: {
+                .foregroundStyle(theme.secondaryText)
             addWidgetMenu
                 .fixedSize()
         }
-        .foregroundStyle(theme.secondaryText)
-        .frame(maxWidth: .infinity, minHeight: 300)
+        .padding(32)
+        .frame(maxWidth: .infinity)
+        .themedSurface()
     }
 
     // MARK: Canvas
 
     private func canvas(metrics: DashboardMetrics) -> some View {
         let layout = proposedLayout(for: interaction, metrics: metrics)
-        let rows = (layout.map { $0.y + $0.height }.max() ?? 0) + (isEditing ? 3 : 0)
+        let rows = (layout.map { $0.y + $0.height }.max() ?? 0) + (isEditing ? 2 : 0)
 
         return ZStack(alignment: .topLeading) {
             if isEditing {
-                columnGuides(metrics: metrics)
+                CellGuides(metrics: metrics, rows: rows, color: theme.text)
             }
 
             // Shows where the widget being dragged/resized will land.
             if let interaction, let target = layout.first(where: { $0.id == interaction.widgetID }) {
                 let frame = metrics.frame(for: target)
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(theme.accent.opacity(0.12))
-                    .strokeBorder(theme.accent.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                Rectangle()
+                    .fill(theme.accent.opacity(0.18))
+                    .overlay {
+                        Rectangle().strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 3, dash: [8, 5]))
+                    }
                     .frame(width: frame.width, height: frame.height)
                     .offset(x: frame.minX, y: frame.minY)
-                    .animation(.snappy(duration: 0.2), value: frame)
+                    .animation(.snappy(duration: 0.2), value: target)
             }
 
             ForEach(layout) { widget in
@@ -135,17 +142,6 @@ struct HomeView: View {
         .coordinateSpace(.named(DashboardMetrics.coordinateSpace))
     }
 
-    private func columnGuides(metrics: DashboardMetrics) -> some View {
-        HStack(spacing: metrics.spacing) {
-            ForEach(0..<DashboardLayout.columns, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(theme.accent.opacity(0.05))
-            }
-        }
-        .frame(width: metrics.width)
-        .frame(maxHeight: .infinity)
-    }
-
     @ViewBuilder
     private func widgetView(_ widget: DashboardWidget, metrics: DashboardMetrics) -> some View {
         let isActive = interaction?.widgetID == widget.id
@@ -153,19 +149,19 @@ struct HomeView: View {
 
         WidgetCard(widget: widget, isEditing: isEditing, isActive: isActive)
             .frame(width: frame.width, height: frame.height)
-            .overlay(alignment: .topLeading) {
+            .overlay(alignment: .topTrailing) {
                 if isEditing {
                     Button {
                         withAnimation(.snappy) { dashboard.remove(widget) }
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, theme.secondaryText)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundStyle(.white)
+                            .frame(width: 26, height: 26)
+                            .background(theme.text)
                     }
                     .buttonStyle(.plain)
                     .help("Remove Widget")
-                    .offset(x: -8, y: -8)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -183,7 +179,8 @@ struct HomeView: View {
             .offset(x: frame.minX, y: frame.minY)
             .zIndex(isActive ? 1 : 0)
             // The widget under the pointer tracks it directly; everything else animates into place.
-            .animation(isActive ? nil : .snappy(duration: 0.25), value: frame)
+            // Keyed on grid position (not points) so window resizing doesn't animate.
+            .animation(isActive ? nil : .snappy(duration: 0.25), value: widget)
     }
 
     /// Where a widget is drawn right now: under the pointer if it's being dragged, otherwise its layout slot.
@@ -199,7 +196,7 @@ struct HomeView: View {
         case .move:
             return originalFrame.offsetBy(dx: interaction.translation.width, dy: interaction.translation.height)
         case .resize:
-            let minimum = metrics.frame(for: DashboardWidget(kind: widget.kind, x: 0, y: 0, width: widget.kind.minimumSize.width, height: widget.kind.minimumSize.height))
+            let minimum = metrics.size(for: widget.kind.minimumSize)
             return CGRect(
                 origin: originalFrame.origin,
                 size: CGSize(
@@ -260,17 +257,20 @@ struct HomeView: View {
     }
 }
 
-/// Converts between grid units and points.
+/// Converts between grid cells and points. Cells are square-ish, so the grid reads as rows × columns.
 private struct DashboardMetrics {
     static let coordinateSpace = "dashboard"
 
     let width: CGFloat
-    let rowHeight: CGFloat = 64
-    let spacing: CGFloat = 16
+    let spacing: CGFloat = 18
 
     var columnWidth: CGFloat {
         max((width - spacing * CGFloat(DashboardLayout.columns - 1)) / CGFloat(DashboardLayout.columns), 0)
     }
+
+    /// Rows match the column width (square cells), within limits so very wide or narrow windows stay usable.
+    var rowHeight: CGFloat { min(max(columnWidth, 110), 170) }
+
     var columnStep: CGFloat { columnWidth + spacing }
     var rowStep: CGFloat { rowHeight + spacing }
 
@@ -283,12 +283,37 @@ private struct DashboardMetrics {
         )
     }
 
+    func size(for gridSize: GridSize) -> CGSize {
+        CGSize(width: CGFloat(gridSize.width) * columnStep - spacing, height: CGFloat(gridSize.height) * rowStep - spacing)
+    }
+
     func height(forRows rows: Int) -> CGFloat {
         max(CGFloat(rows) * rowStep - spacing, 0)
     }
 }
 
-/// A widget's card: title bar plus a read-only preview of its module.
+/// Edit-mode backdrop showing every cell of the bento grid.
+private struct CellGuides: View {
+    let metrics: DashboardMetrics
+    let rows: Int
+    let color: Color
+
+    var body: some View {
+        Canvas { context, _ in
+            for row in 0..<rows {
+                for column in 0..<DashboardLayout.columns {
+                    let cell = metrics.frame(for: DashboardWidget(kind: .journalRecent, x: column, y: row, width: 1, height: 1))
+                    context.fill(Path(cell), with: .color(color.opacity(0.04)))
+                    context.stroke(Path(cell), with: .color(color.opacity(0.25)), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                }
+            }
+        }
+        .frame(width: metrics.width, height: metrics.height(forRows: rows))
+        .allowsHitTesting(false)
+    }
+}
+
+/// A widget's card: heavy title plus a read-only preview of its module.
 private struct WidgetCard: View {
     @Environment(ThemeStore.self) private var theme
     let widget: DashboardWidget
@@ -297,27 +322,34 @@ private struct WidgetCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(widget.kind.title, systemImage: widget.kind.systemImage)
-                .font(.headline)
-                .foregroundStyle(theme.accent)
-                .lineLimit(1)
+            HStack {
+                SectionLabel(title: widget.kind.title, systemImage: widget.kind.systemImage)
+                Spacer(minLength: 0)
+                if !isEditing {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundStyle(theme.text)
+                }
+            }
 
+            // Explicit zero minimums stop content from growing the card past its grid cell.
             WidgetContent(kind: widget.kind)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+                .clipped()
                 .allowsHitTesting(false)
         }
         .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .clipShape(.rect(cornerRadius: 14))
-        .themedSurface()
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+        .clipped()
+        .themedSurface(shadowOffset: isActive ? 10 : BoxStyle.shadowOffset)
         .overlay {
-            if isEditing {
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(theme.accent.opacity(isActive ? 0.9 : 0.35), style: StrokeStyle(lineWidth: 2, dash: isActive ? [] : [6, 4]))
+            if isEditing && !isActive {
+                Rectangle()
+                    .strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .padding(4)
             }
         }
-        .scaleEffect(isActive ? 1.02 : 1)
-        .shadow(color: .black.opacity(isActive ? 0.15 : 0), radius: 16, y: 6)
+        .offset(x: isActive ? -4 : 0, y: isActive ? -4 : 0)
     }
 }
 
@@ -329,6 +361,8 @@ private struct WidgetContent: View {
         switch kind {
         case .journalRecent: JournalRecentWidget()
         case .journalStats: JournalStatsWidget()
+        case .academicsUpcoming: UpcomingExamsWidget()
+        case .academicsProgress: SyllabusProgressWidget()
         }
     }
 }
@@ -338,11 +372,11 @@ private struct ResizeHandle: View {
 
     var body: some View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.caption.bold())
+            .font(.system(size: 11, weight: .black))
             .foregroundStyle(.white)
-            .frame(width: 24, height: 24)
-            .background(theme.accent, in: .circle)
-            .padding(6)
+            .frame(width: 26, height: 26)
+            .background(theme.accent)
+            .overlay { Rectangle().strokeBorder(theme.text, lineWidth: BoxStyle.borderWidth) }
             .contentShape(.rect)
             .pointerStyle(.frameResize(position: .bottomTrailing))
             .help("Drag to resize")
